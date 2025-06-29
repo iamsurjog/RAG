@@ -87,9 +87,26 @@ if question:
     # Here, you would call your RAG backend to get the answer
     # For now, just echo the question
     retrieved_knowledge = retrieve(question)
-    ans = ''
+
+    print('Retrieved knowledge:')
     for chunk, similarity in retrieved_knowledge:
-        ans += f' - (similarity: {similarity:.2f}) {chunk}'
+        print(f' - (similarity: {similarity:.2f}) {chunk}')
+    instruction_prompt = '''You are a helpful chatbot.
+    Use only the following pieces of context to answer the question. Don't make up any new information: \n
+    ''' + ('\n'.join([f' - {chunk}' for chunk, similarity in retrieved_knowledge]))
+
+    stream = ollama.chat(
+      model=LANGUAGE_MODEL,
+      messages=[
+        {'role': 'system', 'content': instruction_prompt},
+        {'role': 'user', 'content': question},
+      ],
+      stream=True,
+    )
+    ans = ''
+    
+    for chunk in stream:
+        ans += chunk['message']['content']
     st.markdown("**Answer:**")
     st.write(ans)
 else:
