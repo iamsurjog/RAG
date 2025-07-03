@@ -1,5 +1,7 @@
 # Contains the core RAG functions so it is easier to work with it later
 from ingest import read
+# from script.add_file import add_to_kb
+import ollama
 
 class Core:
     def __init__(self, EMBEDDING_MODEL, LANGUAGE_MODEL):
@@ -8,6 +10,7 @@ class Core:
         self.VECTOR_DB = list()
         self.history = False
         self.chat = []
+        self.VECTOR_DICT = dict()
 
     def cosine_similarity(self, a, b):
         dot_product = sum([x * y for x, y in zip(a, b)])
@@ -20,7 +23,7 @@ class Core:
         query_embedding = ollama.embed(model=self.EMBEDDING_MODEL, input=query)['embeddings'][0]
         # temporary list to store (chunk, similarity) pairs
         similarities = []
-        for chunk, embedding in VECTOR_DB:
+        for chunk, embedding in self.VECTOR_DB:
             similarity = self.cosine_similarity(query_embedding, embedding)
             similarities.append((chunk, similarity))
         # sort by similarity in descending order, because higher similarity means more relevant chunks
@@ -58,12 +61,23 @@ class Core:
         self.chat = []
 
     def add_files(self, fpath):
-        # TODO: Add a method to add files to the RAG
-        read(fpath)
-        pass
+        dataset = read(fpath)
+        # print(dataset)
+        VECTOR_DB_Local = []
+    
+        for i, chunk in enumerate(dataset):
+            VECTOR_DB_Local.append(self.add_chunk_to_database(chunk))
+            print(f'Added chunk {i+1}/{len(dataset)} to the database')
 
-    def remove_files(self):
-        # TODO: Add a method to remove files
-        pass
+        self.VECTOR_DICT[fpath] = VECTOR_DB_Local
+        self.VECTOR_DB.extend(VECTOR_DB_Local)
 
+    def remove_files(self, fpath):
+        if fpath in self.VECTOR_DICT:
+            for i in self.VECTOR_DICT[fpath]:
+                self.VECTOR_DB.remove(i)
+
+    def add_chunk_to_database(self, chunk):
+        embedding = ollama.embed(model=self.EMBEDDING_MODEL, input=chunk)['embeddings'][0]
+        return (chunk, embedding)
 
