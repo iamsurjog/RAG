@@ -1,4 +1,5 @@
 # Contains the core RAG functions so it is easier to work with it later
+from ingest import read
 
 class Core:
     def __init__(self, EMBEDDING_MODEL, LANGUAGE_MODEL):
@@ -48,12 +49,21 @@ class Core:
         )
         output = ""
         for chunk in stream:
-            output += chunk['message']['content'], end='', flush=True
+            output += chunk['message']['content']
         if self.history:
             self.chat.append({'role': 'assistant', 'content': output})
         return output
     
-    def clear_history:
+    def clear_history(self):
         self.chat = []
+
+    def add_files(self, fpath):
+        # TODO: Add a method to add files to the RAG
+        read(fpath)
+        pass
+
+    def remove_files(self):
+        # TODO: Add a method to remove files
+        pass
 
 
