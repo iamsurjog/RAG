@@ -1,113 +1,105 @@
 import streamlit as st
-import ollama
 import os
+from rag import Core
 from dotenv import load_dotenv
-from scripts.add_file import add_to_kb
-
-# Loading the models from the .env file
 
 load_dotenv()
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL")
 LANGUAGE_MODEL = os.getenv("LANGUAGE_MODEL")
 
-def cosine_similarity(a, b):
-  dot_product = sum([x * y for x, y in zip(a, b)])
-  norm_a = sum([x ** 2 for x in a]) ** 0.5
-  norm_b = sum([x ** 2 for x in b]) ** 0.5
-  return dot_product / (norm_a * norm_b)
+# Dummy backend functions (replace with your logic)
+def add_files(files):
+    st.info(f"add_file called with: {files}")
+    for file in files:
+       st.session_state["rag"].add_file(file)
 
+def remove_file(filename):
+    st.info(f"remove_file called with: {filename}")
+    st.session_state["rag"].remove_file(file)
 
-def retrieve(query, top_n=3):
-  query_embedding = ollama.embed(model=EMBEDDING_MODEL, input=query)['embeddings'][0]
-  # temporary list to store (chunk, similarity) pairs
-  similarities = []
-  for chunk, embedding in st.session_state['VECTOR_DB']:
-    similarity = cosine_similarity(query_embedding, embedding)
-    similarities.append((chunk, similarity))
-  # sort by similarity in descending order, because higher similarity means more relevant chunks
-  similarities.sort(key=lambda x: x[1], reverse=True)
-  # finally, return the top N most relevant chunks
-  return similarities[:top_n]
+def rag_answer(question, files):
+    # Dummy answer: In real use, call your RAG model here
+    sources = ', '.join(files) if files else "No sources"
+    response = st.session_state["rag"].generate(question)
+    return response, sources
 
-# --- Sidebar: File List and Add File Button ---
-st.sidebar.title("Knowledge Base Files")
+# --- Sidebar: File Management ---
+st.sidebar.title("Knowledge Base")
+uploaded_files = st.sidebar.file_uploader("Browse files", accept_multiple_files=True)
 
-# Session state to persist file list, content and vectordb
-if 'files' not in st.session_state:
-    st.session_state['files'] = {}
-if 'selected_file' not in st.session_state:
-    st.session_state['selected_file'] = None
-if 'VECTOR_DB' not in st.session_state:
-    st.session_state['VECTOR_DB'] = []
+# Store the previous list of files in session state
+if "prev_files" not in st.session_state:
+    st.session_state["prev_files"] = []
 
-# Button to add files
-uploaded_files = st.sidebar.file_uploader(
-    "Add files to knowledge base",
-    accept_multiple_files=True,
-    key="file_uploader"
-)
+# Store the core RAG in session state
+if "rag" not in st.session_state:
+    st.session_state["rag"] = Core(EMBEDDING_MODEL, LANGUAGE_MODEL)
 
-# Add uploaded files to session state
-if uploaded_files:
-    for file in uploaded_files:
-        st.session_state['VECTOR_DB'].extend(add_to_kb(file.name, EMBEDDING_MODEL))
-        st.session_state['files'][file.name] = file.getvalue()
+# Convert uploaded_files to a list of filenames
+current_files = [file.name for file in uploaded_files] if uploaded_files else []
 
-# Display list of files
-file_names = list(st.session_state['files'].keys())
-if file_names:
-    selected = st.sidebar.radio("Files:", file_names, key="file_list")
-    st.session_state['selected_file'] = selected
-else:
-    st.sidebar.write("No files added yet.")
+# Detect added files
+added_files = [f for f in current_files if f not in st.session_state["prev_files"]]
+if added_files:
+    add_files(added_files)
 
-# --- Main Area: File Viewer, Q&A ---
-st.title("RAG Knowledge Base")
+# Detect removed files
+removed_files = [f for f in st.session_state["prev_files"] if f not in current_files]
+for f in removed_files:
+    remove_file(f)
 
-# Display selected file content
-if st.session_state['selected_file']:
-    st.subheader(f"Viewing: {st.session_state['selected_file']}")
-    file_content = st.session_state['files'][st.session_state['selected_file']]
-    try:
-        # Try to decode as text
-        st.text_area(
-            "File Content",
-            file_content.decode("utf-8"),
-            height=200,
-            disabled=True
-        )
-    except Exception:
-        st.write("Cannot display file content (not a text file).")
+# Update the previous file list
+st.session_state["prev_files"] = current_files
 
-# Input field for questions
-question = st.text_input("Ask a question:")
+# --- Main: Perplexity-like RAG UI ---
+st.title("💬 Ask your Knowledge Base")
 
-# Placeholder for answer
-if question:
-    # Here, you would call your RAG backend to get the answer
-    # For now, just echo the question
-    retrieved_knowledge = retrieve(question)
+# Store chat history in session state
+if "chat_history" not in st.session_state:
+    st.session_state["chat_history"] = []
 
-    print('Retrieved knowledge:')
-    for chunk, similarity in retrieved_knowledge:
-        print(f' - (similarity: {similarity:.2f}) {chunk}')
-    instruction_prompt = '''You are a helpful chatbot.
-    Use only the following pieces of context to answer the question. Don't make up any new information: \n
-    ''' + ('\n'.join([f' - {chunk}' for chunk, similarity in retrieved_knowledge]))
+# Chat input
+with st.form("rag_chat", clear_on_submit=True):
+    question = st.text_input("Ask a question about your knowledge base...", "")
+    submitted = st.form_submit_button("Ask")
 
-    stream = ollama.chat(
-      model=LANGUAGE_MODEL,
-      messages=[
-        {'role': 'system', 'content': instruction_prompt},
-        {'role': 'user', 'content': question},
-      ],
-      stream=True,
+if submitted and question:
+    # Get answer from RAG system (replace with your logic)
+    answer, sources = rag_answer(question, current_files)
+    # Save to chat history
+    st.session_state["chat_history"].append({
+        "question": question,
+        "answer": answer,
+        "sources": sources
+    })
+
+# Display chat history (most recent last)
+for chat in st.session_state["chat_history"]:
+    with st.chat_message("user"):
+        st.markdown(f"**You:** {chat['question']}")
+    with st.chat_message("assistant"):
+        st.markdown(chat["answer"])
+        st.caption("Sources:")
+        if current_files:
+            st.write(
+                " ".join(
+                    f"`{file}`" for file in current_files
+                )
+            )
+        else:
+            st.write("_No files in knowledge base_")
+
+# Show current files as chips/tags at the top
+if current_files:
+    st.subheader("Knowledge Base Files")
+    st.write(
+        " ".join(
+            f'<span style="background-color:#e0e0e0; border-radius:8px; padding:4px 8px; margin-right:4px;">{file}</span>'
+            for file in current_files
+        ),
+        unsafe_allow_html=True
     )
-    ans = ''
-    
-    for chunk in stream:
-        ans += chunk['message']['content']
-    st.markdown("**Answer:**")
-    st.write(ans)
 else:
-    st.markdown("**Answer will appear here.**")
+    st.info("No files in the knowledge base yet. Upload files from the sidebar.")
+
+
