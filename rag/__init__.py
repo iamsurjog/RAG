@@ -65,7 +65,7 @@ class Core:
     def clear_history(self):
         self.chat = []
 
-    def add_files(self, fpath):
+    def add_file(self, fpath):
         dataset = read(fpath)
         # print(dataset)
         VECTOR_DB_Local = []
@@ -77,7 +77,7 @@ class Core:
         self.VECTOR_DICT[fpath] = VECTOR_DB_Local
         self.VECTOR_DB.extend(VECTOR_DB_Local)
 
-    def remove_files(self, fpath):
+    def remove_file(self, fpath):
         if fpath in self.VECTOR_DICT:
             for i in self.VECTOR_DICT[fpath]:
                 self.VECTOR_DB.remove(i)
