@@ -2,6 +2,8 @@
 from ingest import read
 # from script.add_file import add_to_kb
 import ollama
+import os
+import pickle
 
 class Core:
     def __init__(self, EMBEDDING_MODEL, LANGUAGE_MODEL):
@@ -9,7 +11,14 @@ class Core:
         self.LANGUAGE_MODEL = LANGUAGE_MODEL
         self.VECTOR_DB = list()
         self.history = True
+        self.global_history = True
         self.chat = []
+        self.top_n = 3
+        self.hallucinate = False
+        if "history.dat" in os.listdir():
+            f = open("history.dat", "rb")
+            pickle.load(self.chat, f)
+            f.close()
         self.VECTOR_DICT = dict()
 
     def cosine_similarity(self, a, b):
@@ -32,15 +41,25 @@ class Core:
         return similarities[:top_n]
 
     def generate(self, input_query):
-        retrieved_knowledge = self.retrieve(input_query)
-        instruction_prompt = '''You are a helpful chatbot.
-        Use only the following pieces of context to answer the question. Don't make up any new information: \n
-        ''' + ('\n'.join([f' - {chunk}' for chunk, similarity in retrieved_knowledge]))
+        retrieved_knowledge = self.retrieve(input_query, top_n=self.top_n)
+        if self.hallucinate:
+
+            instruction_prompt = '''You are a helpful chatbot.
+            Use only the following pieces of context to answer the question. If you make up new information, make sure to explicitly mention it \n
+            ''' + ('\n'.join([f' - {chunk}' for chunk, similarity in retrieved_knowledge]))
+        else:
+            instruction_prompt = '''You are a helpful chatbot.
+            Use only the following pieces of context to answer the question. Don't make up any new information: \n
+            ''' + ('\n'.join([f' - {chunk}' for chunk, similarity in retrieved_knowledge]))
         # print('\n'.join([f' - {chunk}' for chunk, similarity in retrieved_knowledge]))
         # print(instruction_prompt)
         if self.history:
             msgs = self.chat
             msgs.extend([ {'role': 'system', 'content': instruction_prompt}, {'role': 'user', 'content': input_query}, ])
+            if self.global_history:
+                f = open("history.dat", "wb")
+                pickle.dump(self.chat, f)
+                f.close()
         else:
             msgs = [
                 {'role': 'system', 'content': instruction_prompt},

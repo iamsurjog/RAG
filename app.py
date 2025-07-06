@@ -35,6 +35,16 @@ if "prev_files" not in st.session_state:
 if "rag" not in st.session_state:
     st.session_state["rag"] = Core(EMBEDDING_MODEL, LANGUAGE_MODEL)
 
+# --- Additional Sidebar Controls ---
+history = st.sidebar.checkbox("History", value=True)
+st.session_state["rag"].history = history
+session_history = st.sidebar.checkbox("Global History", value=True)
+st.session_state["rag"].global_history = session_history
+hallucinate = st.sidebar.checkbox("Allow Usage of own information", value=False)
+st.session_state["rag"].hallucinate = hallucinate
+top_n = st.sidebar.slider("Top n outputs", min_value=1, max_value=10, value=3)
+st.session_state["rag"].top_n = top_n
+
 # Convert uploaded_files to a list of filenames
 current_files = [file.name for file in uploaded_files] if uploaded_files else []
 
